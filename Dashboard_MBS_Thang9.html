@@ -1327,6 +1327,34 @@ function mcBar(kind,F,canvasId){
     mcDrawStatusBar(canvasId,ssl.map(shortName),green,orange,red,i=>{state.mbsC.ss=ssl[i];state.mbsC.pos='';mbsComboRender();},'Đạt thưởng','Đang chạy','Chưa phát sinh');
   }
 }
+function mcZeroTitleHTML(mode){
+  return mode==='dat'
+    ? '✅ Quầy ĐÃ PHÁT SINH doanh số <span class="mbsc-note">(đã có ít nhất 1 đơn hàng tính doanh số — theo loại CAT1/2/3, Brand1/2/3)</span>'
+    : '🚩 Quầy CHƯA PHÁT SINH doanh số <span class="mbsc-note">(đã tham gia MBS nhưng chưa có đơn hàng nào tính doanh số — theo loại CAT1/2/3, Brand1/2/3)</span>';
+}
+function mcZeroFilterHTML(){
+  const cur=state.mbsC.zeroMode||'chuaps';
+  const modes=[['chuaps','🔴 Chưa phát sinh doanh số'],['dat','🟢 Phát sinh doanh số']];
+  return '<div class="mc-pillbar"><div class="mc-pillgrp"><span class="lbl">Bộ lọc theo dõi:</span>'+modes.map(([k,l])=>`<span class="mc-pill ${cur===k?'on':''}" onclick="mcSetZeroMode('${k}')">${l}</span>`).join('')+'</div></div>';
+}
+window.mcSetZeroMode=m=>{state.mbsC.zeroMode=m;mbsComboRender();};
+function mcZeroList(kind,F){
+  const O=DB[kind].outlets;
+  const mode=state.mbsC.zeroMode||'chuaps';
+  const rows=F.filter(f=> mode==='dat' ? mst(f)!=='chuaps' : mst(f)==='chuaps');
+  if(!rows.length) return `<div class="mov-row" style="opacity:.75;padding:4px 2px">${mode==='dat'?'— Không có quầy nào đã phát sinh doanh số.':'✓ Không có quầy nào chưa phát sinh doanh số.'}</div>`;
+  const byTier={};rows.forEach(f=>{const t=(O[f.o]&&O[f.o].mt)||'?';byTier[t]=(byTier[t]||0)+1;});
+  const tierOrder=Object.keys(byTier).sort();
+  const note='<div class="mbsc-note" style="margin:2px 0 8px">'+fmt(rows.length)+' quầy — '+tierOrder.map(t=>`<span class="tag mt">${t}</span> <b>${byTier[t]}</b>`).join('  ·  ')+'</div>';
+  const sorted=[...rows].sort((a,b)=>{const oa=O[a.o]||{},ob=O[b.o]||{};return (oa.ss||'').localeCompare(ob.ss||'')||(b.ta-a.ta);});
+  const th='<tr><th class="l">Mã quầy</th><th class="l">Tên quầy</th><th class="l">SS</th><th class="l">ĐDKD</th><th class="l">Kênh</th><th>Loại</th><th>Nền tảng (đ)</th><th>Thực đạt (đ)</th><th>%CT</th></tr>';
+  const accent=mode==='dat'?'#16a34a':'#dc2626';
+  const b=sorted.map(f=>{const o=O[f.o]||{};
+    const ch=o.ch==='off'?'<span class="tag" style="background:#fee2e2;color:#b91c1c">Off</span>':o.ch==='on'?'<span class="tag" style="background:#dcfce7;color:#15803d">On</span>':'<span class="tag">—</span>';
+    return `<tr><td class="l"><b>${f.o}</b></td><td class="l">${o.n||'—'}</td><td class="l">${o.ss||'—'}</td><td class="l">${mcPnOf(o)} <span class="muted">· ${String(o.p||'').split('.').pop()}</span></td><td class="l">${ch}</td><td><span class="tag mt">${o.mt||'—'}</span></td><td>${fmt(f.bt)}</td><td>${fmt(f.ta)}</td>${pctCell(f.ta,f.bt)}</tr>`;
+  }).join('');
+  return note+'<div class="tablewrap" style="border-left:4px solid '+accent+';margin-bottom:10px"><div class="scroll" style="max-height:420px"><table><thead>'+th+'</thead><tbody>'+b+'</tbody></table></div></div>';
+}
 function mcOverview(kind,F){
   const O=DB[kind].outlets, s=state.mbsC;
   if(DB._month==='08/2026'){
@@ -1546,7 +1574,14 @@ function mbsComboRender(){
  <div class="tablewrap"><div class="scroll"><table id="mainTableOutCat"><thead></thead><tbody></tbody></table></div></div>
  <div class="mbsc-h brand"><span id="tblTitleOutBrand"></span> <span class="mbsc-note" id="tblCountOutBrand"></span></div>
  <div class="tablewrap"><div class="scroll"><table id="mainTableOutBrand"><thead></thead><tbody></tbody></table></div></div>
-</div>`;
+</div>
+<div class="mbsc-h" style="margin-top:18px" id="mcZeroTitle"></div>
+<div id="mcZeroFilterBar"></div>
+<div class="mbsc-h cat sub">🏷️ CAT</div>
+<div id="mcZeroCat"></div>
+<div class="mbsc-h brand">⭐ Brand</div>
+<div id="mcZeroBrand"></div>
+`;
     app.dataset.built='1';
   }
   document.getElementById('mcFilters').innerHTML=mcFilterHTML();
@@ -1576,6 +1611,10 @@ function mbsComboRender(){
     mcOutletTable('cat',Fcat,'mainTableOutCat','tblCountOutCat','tblTitleOutCat');
     mcOutletTable('brand',Fbrand,'mainTableOutBrand','tblCountOutBrand','tblTitleOutBrand');
   }
+  document.getElementById('mcZeroTitle').innerHTML=mcZeroTitleHTML(state.mbsC.zeroMode||'chuaps');
+  document.getElementById('mcZeroFilterBar').innerHTML=mcZeroFilterHTML();
+  document.getElementById('mcZeroCat').innerHTML=mcZeroList('cat',Fcat);
+  document.getElementById('mcZeroBrand').innerHTML=mcZeroList('brand',Fbrand);
 }
 function mFacts(){const s=cur();const O=D().outlets;return D().facts.filter(f=>{const o=O[f.o];if(!o)return false;
   if(s.chF&&s.chF!=='all'&&o.ch!==s.chF)return false;if(!chanOK(o))return false;
